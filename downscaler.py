@@ -102,8 +102,8 @@ def hls_model():
     above_pixels        = [ None ] * (INPUT_SB_SIZE // 2)
     left_pixels         = [ None ] * (INPUT_SB_SIZE * 3 // 4)
 
-    cur_left_pixels     = [ None ] * 3
-    cur_above_pixels    = [ None ] * 2
+    tile_left_pixels    = [ None ] * 3
+    tile_above_pixels   = [ None ] * 2
 
     output_merge_fifo   = [ ]
     output_tile         = [ None ] * 16
@@ -151,51 +151,51 @@ def hls_model():
                     print("above_left_pixel:")
                     pprint(above_left_pixel)
                     
-                    # cur_left_pixels only needs to be initialized at the left boundary
+                    # tile_left_pixels only needs to be initialized at the left boundary
                     # of a super block. For all other cases, it is updated below when
                     # the current tile calculations are completed.
                     if tile_x == 0:
                         if sb_x == 0:
-                            cur_left_pixels[0]  = ( input_tile[0], input_tile[4] )  
-                            cur_left_pixels[1]  = ( input_tile[4], input_tile[8], input_tile[12] ) 
-                            cur_left_pixels[2]  = input_tile[12]
+                            tile_left_pixels[0] = ( input_tile[0], input_tile[4] )  
+                            tile_left_pixels[1] = ( input_tile[4], input_tile[8], input_tile[12] ) 
+                            tile_left_pixels[2] = input_tile[12]
                         else:
-                            cur_left_pixels[0]  = left_pixels[tile_y * 3]
-                            cur_left_pixels[1]  = left_pixels[tile_y * 3 + 1]
-                            cur_left_pixels[2]  = left_pixels[tile_y * 3 + 2]
+                            tile_left_pixels[0] = left_pixels[tile_y * 3]
+                            tile_left_pixels[1] = left_pixels[tile_y * 3 + 1]
+                            tile_left_pixels[2] = left_pixels[tile_y * 3 + 2]
 
-                    print("cur_left_pixels:")
-                    pprint(cur_left_pixels)
+                    print("tile_left_pixels:")
+                    pprint(tile_left_pixels)
 
                     if sb_y == 0 and tile_y == 0:
-                        cur_above_pixels[0] = (above_left_pixel, input_tile[0], input_tile[1] )
-                        cur_above_pixels[1] = (input_tile[1], input_tile[2], input_tile[3] )
+                        tile_above_pixels[0]    = (above_left_pixel, input_tile[0], input_tile[1] )
+                        tile_above_pixels[1]    = (input_tile[1], input_tile[2], input_tile[3] )
                     else:
-                        cur_above_pixels[0] = above_pixels[tile_x * 2]
-                        cur_above_pixels[1] = above_pixels[tile_x * 2 + 1]
+                        tile_above_pixels[0]    = above_pixels[tile_x * 2]
+                        tile_above_pixels[1]    = above_pixels[tile_x * 2 + 1]
 
-                    print("cur_above_pixels:")
-                    pprint(cur_above_pixels)
+                    print("tile_above_pixels:")
+                    pprint(tile_above_pixels)
 
                     # Symbolic value of the 2x2 pixels that are filtered down from the 4x4 tile.
                     # The elements in the list for each output represent the terms that are summed.
                     # Each term can either be a pixel value (when it's input_tile[x]) or an intermediate sum
-                    # (when it's cur_above_pixels[x] or cur_left_pixels[x])
-                    p00 = (                     cur_above_pixels[0], 
-                           cur_left_pixels[0],  input_tile[0], input_tile[1], 
-                                                input_tile[4], input_tile[5] )
+                    # (when it's tile_above_pixels[x] or tile_left_pixels[x])
+                    p00 = (                      tile_above_pixels[0], 
+                            tile_left_pixels[0], input_tile[0], input_tile[1], 
+                                                 input_tile[4], input_tile[5] )
 
-                    p10 = (                     cur_above_pixels[1], 
-                            input_tile[ 1],     input_tile[ 2], input_tile[ 3] , 
-                            input_tile[ 5],     input_tile[ 6], input_tile[ 7] ) 
+                    p10 = (                      tile_above_pixels[1], 
+                            input_tile[ 1],      input_tile[ 2], input_tile[ 3] , 
+                            input_tile[ 5],      input_tile[ 6], input_tile[ 7] ) 
 
-                    p01 = (cur_left_pixels[1],  input_tile[ 4], input_tile[ 5] , 
-                                                input_tile[ 8], input_tile[ 9] , 
-                                                input_tile[12], input_tile[13] ) 
+                    p01 = (tile_left_pixels[1],  input_tile[ 4], input_tile[ 5] , 
+                                                 input_tile[ 8], input_tile[ 9] , 
+                                                 input_tile[12], input_tile[13] ) 
 
-                    p11 = ( input_tile[ 5],     input_tile[ 6], input_tile[ 7] , 
-                            input_tile[ 9],     input_tile[10], input_tile[11] , 
-                            input_tile[13],     input_tile[14], input_tile[15] ) 
+                    p11 = ( input_tile[ 5],      input_tile[ 6], input_tile[ 7] , 
+                            input_tile[ 9],      input_tile[10], input_tile[11] , 
+                            input_tile[13],      input_tile[14], input_tile[15] ) 
 
                     if tile_y & 1 == 0:
                         output_merge_fifo.append( (p00, p10, p01, p11) )
@@ -229,32 +229,32 @@ def hls_model():
 
                     # The bottom pixels of the current tile become the above pixels
                     # of the tile below it.
-                    cur_above_pixels[0]     = (cur_left_pixels[2], input_tile[12], input_tile[13] )
-                    cur_above_pixels[1]     = (input_tile[13], input_tile[14], input_tile[15] )
+                    tile_above_pixels[0]    = (tile_left_pixels[2], input_tile[12], input_tile[13] )
+                    tile_above_pixels[1]    = (input_tile[13], input_tile[14], input_tile[15] )
 
-                    above_pixels[tile_x * 2]        = cur_above_pixels[0]
-                    above_pixels[tile_x * 2 + 1]    = cur_above_pixels[1]
+                    above_pixels[tile_x * 2]        = tile_above_pixels[0]
+                    above_pixels[tile_x * 2 + 1]    = tile_above_pixels[1]
 
                     # The above_pixels array needs to be restored at the start of
                     # each super blocks so send those values to the DMA FIFO.
                     if not(is_bottom_row_sb) and is_bottom_row_tile:
-                        dma_fifo.append(cur_above_pixels[0])
-                        dma_fifo.append(cur_above_pixels[1])
+                        dma_fifo.append(tile_above_pixels[0])
+                        dma_fifo.append(tile_above_pixels[1])
 
                         print("push fifo:")
-                        pprint(cur_above_pixels[0])
-                        pprint(cur_above_pixels[1])
+                        pprint(tile_above_pixels[0])
+                        pprint(tile_above_pixels[1])
                     
                     # The right pixels of the current tile becomes the left pixels
                     # of the tile to the right of it.
-                    cur_left_pixels[0]  = ( input_tile[3], input_tile[ 7] )
-                    cur_left_pixels[1]  = ( input_tile[7], input_tile[11], input_tile[15] )
-                    cur_left_pixels[2]  = ( input_tile[15] )
+                    tile_left_pixels[0] = ( input_tile[3], input_tile[ 7] )
+                    tile_left_pixels[1] = ( input_tile[7], input_tile[11], input_tile[15] )
+                    tile_left_pixels[2] = ( input_tile[15] )
 
                     if is_right_col_tile:
-                        left_pixels[tile_y * 3]     = cur_left_pixels[0]
-                        left_pixels[tile_y * 3 + 1] = cur_left_pixels[1]
-                        left_pixels[tile_y * 3 + 2] = cur_left_pixels[2]
+                        left_pixels[tile_y * 3]     = tile_left_pixels[0]
+                        left_pixels[tile_y * 3 + 1] = tile_left_pixels[1]
+                        left_pixels[tile_y * 3 + 2] = tile_left_pixels[2]
 
                     if sb_y == 0 and tile_y == 0:
                         above_left_pixel    = input_tile[3]
