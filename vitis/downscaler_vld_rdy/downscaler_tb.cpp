@@ -2,44 +2,51 @@
 #include "ap_axi_sdata.h"
 #include "hls_stream.h"
 
+#include "downscaler_impl.h"
+
 // Reference the top-level function from your header or source
-typedef ap_axis<160, 0, 0, 0> t_tile;
-void downscaler(hls::stream<t_tile> &in_stream, hls::stream<t_tile> &out_stream);
+//typedef ap_axis<160, 0, 0, 0> t_tile;
+//void downscaler(hls::stream<t_tile> &in_stream, hls::stream<t_tile> &out_stream);
 
 int main() {
-    hls::stream<t_tile> tb_in;
-    hls::stream<t_tile> tb_out;
-    t_tile test_pkt;
+    hls::stream<t_tile> tile_in_chn;
+    hls::stream<t_tile> tile_out_chn;
     int err_count = 0;
 
     std::cout << "--- Starting Stream Copier Testbench ---" << std::endl;
 
-    // 1. Prepare Input Data (Simulating 10 packets)
-    for (int i = 0; i < 10; i++) {
-        test_pkt.data = i * 10; // Simple pattern: 0, 10, 20...
-        test_pkt.keep = -1;     // All bytes valid
-        test_pkt.last = (i == 9) ? 1 : 0; // Assert TLAST on the last packet
-        tb_in.write(test_pkt);
+    const int nr_input_tiles    = INPUT_WIDTH * INPUT_HEIGHT / PIXELS_PER_TILE;
+
+    // It's a 2:1 downscaler in both directions, so expect 4 times less pixels.
+    const int nr_output_tiles   = INPUT_WIDTH * INPUT_HEIGHT / PIXELS_PER_TILE / 4;
+
+    std::cout << "Sending " << nr_input_tiles << " input tiles" << std::endl;
+
+    t_tile input_tile;
+
+    // Send 16 pixels at a time
+    for (int i = 0; i < nr_input_tiles; i++) {
+        input_tile.data = i * 10; 
+        input_tile.keep = -1;                     // All bytes valid
+        input_tile.last = (i == nr_input_tiles-1) ? 1 : 0; // Assert TLAST on the last packet
+        tile_in_chn.write(input_tile);
     }
 
-    // 2. Call the HLS Function
-    // In a real hardware loop, this would run continuously. 
-    // Here we call it 10 times to process the 10 inputs.
-    for (int i = 0; i < 10; i++) {
-        downscaler(tb_in, tb_out);
-    }
+    downscaler(tile_in_chn, tile_out_chn);
+
+    std::cout << "Expecting " << nr_output_tiles << " output tiles" << std::endl;
 
     // 3. Verify Output Data
-    if (tb_out.size() != 10) {
-        std::cout << "ERROR: Expected 10 packets, but got " << tb_out.size() << std::endl;
+    if (tile_out_chn.size() != nr_output_tiles) {
+        std::cout << "ERROR: Expected " << nr_output_tiles << " packets, but got " << tile_out_chn.size() << std::endl;
         return 1; 
     }
 
-    for (int i = 0; i < 10; i++) {
-        t_tile result = tb_out.read();
-        std::cout << "Recv: " << result.data << " | Expected: " << (i * 10) << std::endl;
+    for (int i = 0; i < nr_output_tiles; i++) {
+        t_tile output_tile = tile_out_chn.read();
+        std::cout << "Recv: " << output_tile.data << " | Expected: " << (i * 10) << std::endl;
         
-        if (result.data != (i * 10)) {
+        if (output_tile.data != (i * 10)) {
             err_count++;
         }
     }
